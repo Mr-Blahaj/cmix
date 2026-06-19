@@ -730,7 +730,7 @@ PPM_CONTEXT* UpdateModel( PPM_CONTEXT* MinContext ) {
   byte Flag, FSymbol;
   uint ns1, ns, cf, sf, s0, FFreq;
   uint iSuccessor, iFSuccessor;
-  PPM_CONTEXT* pc;
+  PPM_CONTEXT* pc = NULL;
   STATE* p = NULL;
 
   FSymbol = FoundState->Symbol;
@@ -756,7 +756,7 @@ PPM_CONTEXT* UpdateModel( PPM_CONTEXT* MinContext ) {
       p[0].Freq += (p[0].Freq<14);
     }
   }
-  // pc = MaxContext;
+  pc = MaxContext;
 
   if( !OrderFall && iFSuccessor ) {
     FoundState->iSuccessor = CreateSuccessors( 1, p, MinContext );
