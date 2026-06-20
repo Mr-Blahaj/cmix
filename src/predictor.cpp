@@ -18,11 +18,12 @@
 #include "contexts/combined-context.h"
 
 #include <vector>
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 
-Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
-    sigmoid_(100001), vocab_(vocab) {
+Predictor::Predictor(const std::vector<bool>& vocab) : word_model_begin_(0),
+    word_model_end_(0), manager_(), sigmoid_(100001), vocab_(vocab) {
   srand(0xDEADBEEF);
 
   AddBracket();
@@ -102,6 +103,7 @@ void Predictor::AddPPMD() {
 }
 
 void Predictor::AddWord() {
+  word_model_begin_ = models_.size();
   float delta = 200;
   std::vector<std::vector<unsigned int>> model_params = {{0}, {0, 1}, {7, 2},
       {7}, {1}, {1, 2}, {1, 2, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 3}, {3, 4},
@@ -128,6 +130,7 @@ void Predictor::AddWord() {
           0, 500000));
     }
   }
+  word_model_end_ = models_.size();
 }
 
 void Predictor::AddDirect() {
@@ -358,30 +361,56 @@ void Predictor::AddMixers() {
 
 int lstmpr=0, lstmex=0;
 
+namespace {
+void AddToLogOddsAverage(float probability, float* sum, unsigned int* count) {
+  const float epsilon = 1.0e-6f;
+  if (probability < epsilon) probability = epsilon;
+  if (probability > 1.0f - epsilon) probability = 1.0f - epsilon;
+  *sum += logf(probability / (1.0f - probability));
+  ++(*count);
+}
+
+float FinishLogOddsAverage(float sum, unsigned int count) {
+  if (count == 0) return 0.5f;
+  return Sigmoid::Logistic(sum / count);
+}
+}
+
 float Predictor::Predict() {
   unsigned int input_index = 0;
+  float word_log_odds = 0;
+  unsigned int word_outputs = 0;
   for (unsigned int i = 0; i < models_.size(); ++i) {
     const std::valarray<float>& outputs = models_[i]->Predict();
     for (unsigned int j = 0; j < outputs.size(); ++j) {
       layers_[0]->SetInput(input_index, outputs[j]);
+      if (i >= word_model_begin_ && i < word_model_end_) {
+        AddToLogOddsAverage(outputs[j], &word_log_odds, &word_outputs);
+      }
       ++input_index;
     }
   }
 
+  float byte_log_odds = 0;
+  unsigned int byte_outputs = 0;
   for (unsigned int i = 0; i < byte_models_.size(); ++i) {
     const std::valarray<float>& outputs = byte_models_[i]->Predict();
     for (unsigned int j = 0; j < outputs.size(); ++j) {
       layers_[0]->SetInput(input_index, outputs[j]);
+      AddToLogOddsAverage(outputs[j], &byte_log_odds, &byte_outputs);
       ++input_index;
     }
   }
   float byte_mixer_override = -1;
+  float semantic_log_odds = 0;
+  unsigned int semantic_outputs = 0;
   for (unsigned int i = 0; i < byte_mixers_.size(); ++i) {
     const std::valarray<float>& outputs = byte_mixers_[i]->Predict();
     for (unsigned int j = 0; j < outputs.size(); ++j) {
       float p = outputs[j];
       if (p == 0 || p == 1) byte_mixer_override = p;
       layers_[0]->SetInput(input_index, p);
+      AddToLogOddsAverage(p, &semantic_log_odds, &semantic_outputs);
       ++input_index;
     }
   }
@@ -415,10 +444,18 @@ float Predictor::Predict() {
   if (byte_mixer_override >= 0) {
     return byte_mixer_override;
   }
-  return p;
+  return ahp_router_.Route(p,
+      FinishLogOddsAverage(byte_log_odds, byte_outputs),
+      FinishLogOddsAverage(word_log_odds, word_outputs),
+      FinishLogOddsAverage(semantic_log_odds, semantic_outputs));
+}
+
+void Predictor::PrintAHPStats(FILE* stream) const {
+  ahp_router_.PrintStats(stream);
 }
 
 void Predictor::Perceive(int bit) {
+  ahp_router_.Perceive(bit);
   for (unsigned int i = 0; i < models_.size(); ++i) {
     if (i == fxcm_index_) continue;
     models_[i]->Perceive(bit);

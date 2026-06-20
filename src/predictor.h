@@ -9,10 +9,12 @@
 #include "models/model.h"
 #include "models/byte-model.h"
 #include "context-manager.h"
+#include "ahp-router.h"
 
 #include <vector>
 #include <set>
 #include <memory>
+#include <stdio.h>
 
 class Predictor {
  public:
@@ -20,6 +22,7 @@ class Predictor {
   float Predict();
   void Perceive(int bit);
   void Pretrain(int bit);
+  void PrintAHPStats(FILE* stream) const;
 
  private:
   unsigned long long GetNumModels();
@@ -46,8 +49,11 @@ class Predictor {
   std::vector<std::vector<std::unique_ptr<Mixer>>> mixers_;
   std::vector<unsigned int> auxiliary_;
   unsigned int fxcm_index_;
+  unsigned int word_model_begin_;
+  unsigned int word_model_end_;
   ContextManager manager_;
   Sigmoid sigmoid_;
+  AHPRouter ahp_router_;
   std::vector<std::unique_ptr<ByteMixer>> byte_mixers_;
   std::vector<bool> vocab_;
 };

@@ -17,7 +17,7 @@ namespace {
 char* dictionary_path = NULL;
 
 int Help() {
-  printf("cmix version 21\n");
+  printf("cmix-ahp based on cmix version 21\n");
   printf("Compress:\n");
   printf("    with dictionary:    cmix -c [dictionary] [input] [output]\n");
   printf("    without dictionary: cmix -c [input] [output]\n");
@@ -205,6 +205,7 @@ bool RunCompression(bool enable_preprocess, bool text_mode,
   Predictor p(vocab);
   if (enable_preprocess) preprocessor::Pretrain(&p, dictionary);
   Compress(temp_bytes, &temp_in, &data_out, output_bytes, &p);
+  p.PrintAHPStats(stderr);
   temp_in.close();
   data_out.close();
   remove(temp_path.c_str());
@@ -250,6 +251,7 @@ bool RunDecompression(const std::string& input_path,
   if (!temp_out.is_open()) return false;
 
   Decompress(*output_bytes, &data_in, &temp_out, &p);
+  p.PrintAHPStats(stderr);
   data_in.close();
   temp_out.close();
 
