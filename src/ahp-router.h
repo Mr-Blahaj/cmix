@@ -4,8 +4,9 @@
 #include <cstdint>
 #include <stdio.h>
 
-// Routes the final coding probability through progressively richer experts
-// while binary entropy remains high.
+// Learns a synchronized residual correction over CMIX's final probability.
+// Encoder and decoder see the same past bits, so no model parameters need to
+// be stored in the archive.
 class AHPRouter {
  public:
   AHPRouter();
@@ -21,18 +22,17 @@ class AHPRouter {
  private:
   static float LogOdds(float probability);
   static float ClampProbability(float probability);
+  static float ClampFeature(float value);
 
-  float entropy_threshold_;
-  float bias_;
-  float base_weight_;
-  float byte_weight_;
-  float word_weight_;
-  float semantic_weight_;
+  static const int kNumFeatures = 5;
+  float weights_[kNumFeatures];
+  float features_[kNumFeatures];
+  float routed_probability_;
+  float learning_rate_;
+  float weight_decay_;
 
   uint64_t predictions_;
-  uint64_t byte_escalations_;
-  uint64_t word_escalations_;
-  uint64_t semantic_escalations_;
+  uint64_t adaptive_predictions_;
   FILE* trace_;
   float last_bit_probability_;
   float last_byte_probability_;
